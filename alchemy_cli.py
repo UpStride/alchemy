@@ -60,40 +60,43 @@ def ask_if_not_defined(variable, question, hidden=False):
   return variable
 
 
-def main(log_file: str, user: str, password: str, step: int, project: str, run: str, scalar_plots: List[str]):
-  if not os.path.exists(log_file):
-    print('invalid log file')
-    return
+def get_project_id(token: str, project_name: str):
+  """get the project id from the project name given by the user or by user inputs
 
-  # Login to alchemy
-  user = ask_if_not_defined(user, "Please enter username")
-  password = ask_if_not_defined(password, "Please enter password", hidden=True)
-  token = login(user, password)
+  Args:
+      token (str): connection token to Alchemy backend
+      project_name (str): name provided by the user
 
-  # Ask user which project he is working on
+  Returns: the project id
+  """
+
   r = get_requests('/api/projects', token)
   projects = r.json()
-  if project:
-    assert project in [p['name'] for p in projects]
+  if project_name and (project_name in [p['name'] for p in projects]):
+    # Then don't ask user
     for p in projects:
-      if project == p['name']:
-        project_id = p['id']    
+      if project_name == p['name']:
+        project_id = p['id']
   else:
+    # Ask user which project he is working on
     print("\nSelect a project")
     for i, project in enumerate(projects):
       print(f'{i} {project["name"]}')
     project_id = projects[int(input())]['id']
   print(f"project id : {project_id}")
+  return project_id
 
-  # ask user which run he is working on
+
+def get_run_id(token: str, project_id: str, user: str, run_name: str):
   r = get_requests(f'/api/projects/{project_id}/runs', token)
   runs = r.json()
-  if run:
-    assert run in [r['name'] for r in runs]
+  if run_name and (run_name in [r['name'] for r in runs]):
+    # Then don't ask user
     for r in runs:
-      if run == r['name']:
-        run_id = r['id']  
+      if run_name == r['name']:
+        run_id = r['id']
   else:
+    # ask user which run he is working on
     print("\nSelect a run")
     print("0 New run")
     for i, run in enumerate(runs):
@@ -106,11 +109,17 @@ def main(log_file: str, user: str, password: str, step: int, project: str, run: 
       name = input()
       print("Please specify a list of tags, separated by spaces")
       tags = input().split(" ")
+      print("Dataset:")
+      dataset = input()
+      print("Model:")
+      model = input()
       run_info = {
           'name': name,
           'state': 'done',
           'user': user,
-          'tags': tags
+          'tags': tags,
+          'dataset': dataset,
+          'model': model
       }
       r = post_requests(f'/api/projects/{project_id}/runs', run_info, token)
       assert r.status_code == 200, f"error: {r.text}"
@@ -118,13 +127,31 @@ def main(log_file: str, user: str, password: str, step: int, project: str, run: 
     else:
       run_id = runs[int(user_input) - 1]['id']
   print(f"run id : {run_id}")
+  return run_id
+
+
+def main(log_file: str, user: str, password: str, step: int, project: str, run: str, scalar_plots: List[str]):
+  if not os.path.exists(log_file):
+    print('invalid log file')
+    return
+
+  # Login to alchemy
+  user = ask_if_not_defined(user, "Please enter username")
+  password = ask_if_not_defined(password, "Please enter password", hidden=True)
+  token = login(user, password)
+
+  # Get informations
+  project_id = get_project_id(token, project)
+  run_id = get_run_id(token, project_id, user, run)
 
   # Prepare tensorflow logs
   print('\n load tensorboard file, this can take some time')
-  event_acc = EventAccumulator(log_file, {'tensors': 10000,})
+  event_acc = EventAccumulator(log_file, {'tensors': 10000, })
   event_acc.Reload()
   print('loading done')
-  
+
+  # Inside tensorboard, scalar_plots can be saved as scalars or as tensors (but most of the time as scalars)
+  # First try to load scalars and if we found nothing then we load tensors
   names = event_acc.Tags()['scalars']
   event_containers = event_acc.Scalars
   tensors = False
@@ -143,7 +170,7 @@ def main(log_file: str, user: str, password: str, step: int, project: str, run: 
     user_input = input()
     scalar_plots_ids = user_input.split(' ')
     scalar_plots = [names[int(i)] for i in scalar_plots_ids]
-  
+
   data_plots = []
   for scalar_plot in scalar_plots:
     _, step_nums, vals = zip(*event_containers(scalar_plot))
