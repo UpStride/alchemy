@@ -120,7 +120,6 @@ def create_run(token: str, project_id: str, name: str,
   }
   r = post_requests(f'/api/projects/{project_id}/runs', run_info, token)
   assert r.status_code == 200, f"error: {r.text}"
-  print(r.content)
   return r.json()["id"]
 
 
@@ -238,7 +237,7 @@ def main():
   if yaml_file:
     with open(yaml_file, 'r') as f:
       # Merge params from args and from yaml file, priority is given to args
-      yaml_params = yaml.load(f)
+      yaml_params = yaml.load(f, Loader=yaml.SafeLoader)
       for k in parameters:
         if k in yaml_params and parameters[k] is None:
           parameters[k] = yaml_params[k]
