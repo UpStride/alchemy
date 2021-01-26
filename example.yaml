@@ -1,0 +1,11 @@
+user: login@upstride.io
+project: my_project
+run: my_run
+scalar_plots:
+ - my_metric1
+ - my_metric2
+tags:
+ - tag1
+ - tag2
+dataset: my_dataset
+model: my_model
