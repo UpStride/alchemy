@@ -1,18 +1,17 @@
 #!/usr/bin/python3
 import argparse
+import getpass
 import math
 import os
 from typing import List
-import tensorflow as tf
-import getpass
-import yaml
 
 import requests
+import tensorflow as tf
+import yaml
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
 N_POINTS_LIMIT = 300  # Maximum number of point to upload for one curve
 ALCHEMY_BACKEND_URL = 'https://alchemyback.upstride.io'
-# ALCHEMY_BACKEND_URL = 'http://127.0.0.1:4443'
 
 
 parser = argparse.ArgumentParser(description='Cli for alchemy')
@@ -111,12 +110,12 @@ def create_run(token: str, project_id: str, name: str,
     print("Model:")
     model = input()
   run_info = {
-    'name': name,
-    'state': state or 'done',
-    'user': user,
-    'tags': tags,
-    'dataset': dataset,
-    'model': model
+      'name': name,
+      'state': state or 'done',
+      'user': user,
+      'tags': tags,
+      'dataset': dataset,
+      'model': model
   }
   r = post_requests(f'/api/projects/{project_id}/runs', run_info, token)
   assert r.status_code == 200, f"error: {r.text}"
@@ -174,7 +173,6 @@ def run_cli(log_file: str, user: str, password: str, step: int, project: str, ru
   if run_id is None:
     print("Aborted")
     return
-
 
   # Prepare tensorflow logs
   print('\n load tensorboard file, this can take some time')
@@ -242,6 +240,7 @@ def main():
         if k in yaml_params and parameters[k] is None:
           parameters[k] = yaml_params[k]
   run_cli(**parameters)
+
 
 if __name__ == "__main__":
   main()
