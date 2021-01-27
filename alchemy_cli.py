@@ -1,26 +1,31 @@
 #!/usr/bin/python3
 import argparse
+import getpass
 import math
 import os
 from typing import List
-import tensorflow as tf
-import getpass
 
 import requests
+import tensorflow as tf
+import yaml
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
 N_POINTS_LIMIT = 300  # Maximum number of point to upload for one curve
 ALCHEMY_BACKEND_URL = 'https://alchemyback.upstride.io'
-# ALCHEMY_BACKEND_URL = 'http://127.0.0.1:4443'
 
 
 parser = argparse.ArgumentParser(description='Cli for alchemy')
 parser.add_argument('log_file', help='Tensorboard log file to parse')
+parser.add_argument('--yaml_file', help="Path to yaml file containing parameters, overwritten by following arguments")
 parser.add_argument('--user', help='email to connect to alchemy')
 parser.add_argument('--password', help='password to connect to alchemy')
 parser.add_argument('--step', type=int, default=1, help='step between two points to upload')
 parser.add_argument('--project', help='Alchemy project to update')
 parser.add_argument('--run', help='Alchemy run to update')
+group = parser.add_argument_group('run options', 'If the run is new, you can add more parameters')
+group.add_argument('--tags', help='Tags associated with selected run', nargs='*')
+group.add_argument('--model', help='Model used in the selected run')
+group.add_argument('--dataset', help='Dataset used in the selected run')
 parser.add_argument('--scalar_plots', nargs='*', help='scalar graph to upload')
 
 
@@ -87,52 +92,74 @@ def get_project_id(token: str, project_name: str):
   return project_id
 
 
-def get_run_id(token: str, project_id: str, user: str, run_name: str):
+def create_run(token: str, project_id: str, name: str,
+               state: str, user: str, tags: List[str],
+               dataset: str, model: str):
+  if not name:
+    print("\nNew run name:")
+    name = input()
+  if not tags:
+    print("Please specify a list of tags, separated by spaces")
+    tags = input().split(" ")
+
+  if not dataset:
+    print("Dataset:")
+    dataset = input()
+
+  if not model:
+    print("Model:")
+    model = input()
+  run_info = {
+      'name': name,
+      'state': state or 'done',
+      'user': user,
+      'tags': tags,
+      'dataset': dataset,
+      'model': model
+  }
+  r = post_requests(f'/api/projects/{project_id}/runs', run_info, token)
+  assert r.status_code == 200, f"error: {r.text}"
+  return r.json()["id"]
+
+
+def get_run_id(token: str, project_id: str, user: str, run_name: str, **kwargs):
   r = get_requests(f'/api/projects/{project_id}/runs', token)
   runs = r.json()
-  if run_name and (run_name in [r['name'] for r in runs]):
-    # Then don't ask user
-    for r in runs:
-      if run_name == r['name']:
-        run_id = r['id']
-  else:
+  run_id_by_names = {r['name']: r['id'] for r in runs}
+  run_names_list = run_id_by_names.keys()
+  if not run_name:
     # ask user which run he is working on
     print("\nSelect a run")
     print("0 New run")
-    for i, run in enumerate(runs):
-      print(f'{i+1} {run["name"]}')
+    for i, name in enumerate(run_names_list):
+      print(f'{i+1} {name}')
     user_input = int(input())
 
     if user_input == 0:
       # Then create a new run
-      print("\nNew run name:")
-      name = input()
-      print("Please specify a list of tags, separated by spaces")
-      tags = input().split(" ")
-      print("Dataset:")
-      dataset = input()
-      print("Model:")
-      model = input()
-      run_info = {
-          'name': name,
-          'state': 'done',
-          'user': user,
-          'tags': tags,
-          'dataset': dataset,
-          'model': model
-      }
-      r = post_requests(f'/api/projects/{project_id}/runs', run_info, token)
-      assert r.status_code == 200, f"error: {r.text}"
-      run_id = r.json()["id"]
+      run_id = create_run(token, project_id, None, 'done', user, **kwargs)
     else:
-      run_id = runs[int(user_input) - 1]['id']
+      name = run_names_list[int(user_input) - 1]
+      run_id = run_id_by_names[name]
+  elif (run_name in run_names_list):
+    # Then don't ask user
+    run_id = run_id_by_names[run_name]
+  else:
+    # Create a new run
+    answer = None
+    while answer not in ['y', 'n', '']:
+      answer = input(f"Creating a new run named {run_name}, continue ? [Y,n]").lower()
+    if answer == 'n':
+      return
+    else:
+      run_id = create_run(token, project_id, run_name, 'done', user, **kwargs)
   print(f"run id : {run_id}")
   return run_id
 
 
-def main(log_file: str, user: str, password: str, step: int, project: str, run: str, scalar_plots: List[str]):
+def run_cli(log_file: str, user: str, password: str, step: int, project: str, run: str, scalar_plots: List[str], **kwargs):
   if not os.path.exists(log_file):
-    print('invalid log file')
+    print('log file not found')
     return
 
   # Login to alchemy
@@ -142,7 +169,10 @@ def main(log_file: str, user: str, password: str, step: int, project: str, run: 
 
   # Get informations
   project_id = get_project_id(token, project)
-  run_id = get_run_id(token, project_id, user, run)
+  run_id = get_run_id(token, project_id, user, run, **kwargs)
+  if run_id is None:
+    print("Aborted")
+    return
 
   # Prepare tensorflow logs
   print('\n load tensorboard file, this can take some time')
@@ -198,6 +228,19 @@ def main(log_file: str, user: str, password: str, step: int, project: str, run: 
   print(r.text)
 
 
-if __name__ == "__main__":
+def main():
   args = parser.parse_args()
-  main(**vars(args))
+  parameters = vars(args)
+  yaml_file = parameters.pop("yaml_file", None)
+  if yaml_file:
+    with open(yaml_file, 'r') as f:
+      # Merge params from args and from yaml file, priority is given to args
+      yaml_params = yaml.load(f, Loader=yaml.SafeLoader)
+      for k in parameters:
+        if k in yaml_params and parameters[k] is None:
+          parameters[k] = yaml_params[k]
+  run_cli(**parameters)
+
+
+if __name__ == "__main__":
+  main()
