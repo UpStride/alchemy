@@ -26,6 +26,8 @@ group = parser.add_argument_group('run options', 'If the run is new, you can add
 group.add_argument('--tags', help='Tags associated with selected run', nargs='*')
 group.add_argument('--model', help='Model used in the selected run')
 group.add_argument('--dataset', help='Dataset used in the selected run')
+group.add_argument('--accept', '-y', action='store_true',
+                   help='If selected, will not ask permission before creating a new run')
 parser.add_argument('--scalar_plots', nargs='*', help='scalar graph to upload')
 
 
@@ -122,7 +124,7 @@ def create_run(token: str, project_id: str, name: str,
   return r.json()["id"]
 
 
-def get_run_id(token: str, project_id: str, user: str, run_name: str, **kwargs):
+def get_run_id(token: str, project_id: str, user: str, run_name: str, accept: bool, **kwargs):
   r = get_requests(f'/api/projects/{project_id}/runs', token)
   runs = r.json()
   run_id_by_names = {r['name']: r['id'] for r in runs}
@@ -146,7 +148,10 @@ def get_run_id(token: str, project_id: str, user: str, run_name: str, **kwargs):
     run_id = run_id_by_names[run_name]
   else:
     # Create a new run
-    answer = None
+    if accept:
+      answer = 'y'
+    else:
+      answer = None
     while answer not in ['y', 'n', '']:
       answer = input(f"Creating a new run named {run_name}, continue ? [Y,n]").lower()
     if answer == 'n':
@@ -184,10 +189,16 @@ def run_cli(log_file: str, user: str, password: str, step: int, project: str, ru
   # First try to load scalars and if we found nothing then we load tensors
   names = event_acc.Tags()['scalars']
   event_containers = event_acc.Scalars
+  events = {name: event_containers(name) for name in names}
   tensors = False
   if not names:
     names = event_acc.Tags()['tensors']
+    # Filter tensors that are not scalars, i.e. images or histograms
     event_containers = event_acc.Tensors
+    events = {}
+    for name in names:
+      if event_acc.summary_metadata[name].plugin_data.plugin_name == 'scalars':
+        events[name] = event_containers(name)
     tensors = True
 
   # If the user didn't specify which plot to upload, then ask him
@@ -195,7 +206,7 @@ def run_cli(log_file: str, user: str, password: str, step: int, project: str, ru
     # Show all tags in the log file
     print('\npossible scalar plot to upload on Alchemy :')
     for i, name in enumerate(names):
-      print(f'{i}- {name} ({len(event_containers(name))} points)')
+      print(f'{i}- {name} ({len(events[name])} points)')
     print('please enter list of id separated by space')
     user_input = input()
     scalar_plots_ids = user_input.split(' ')

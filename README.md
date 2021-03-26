@@ -38,3 +38,11 @@ and then be used directly with
 ```
 alchemy_cli <log_fie> <parameters>
 ```
+
+## Upload_everything
+
+If your experiments are stored in a way that every event files comes with a corresponding yaml, you can use a dedicated script to upload runs based on a wildcard file pattern
+
+```
+bash upload_everything.sh "*my_pattern*" "my_password"
+```
