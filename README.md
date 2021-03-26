@@ -1,6 +1,50 @@
 # Alchemy CLI
 
-this is the command line interface (CLI) for alchemy
+this is the software development kit (SDK) and command line interface (CLI) for alchemy
+
+## install
+
+to install this package run
+```python
+pip install alchemy-cli
+```
+
+or clone this repository and run
+```python
+pip install [-e] .
+```
+or
+```python
+python setup.py {install, develop}
+```
+
+## SDK
+To import the sdk in your project, do a simple
+
+```python
+import alchemy
+```
+
+you can now login to alchemy using your credentials and initialize the project :
+
+```python
+alchemy.login(your@email, yourpassword)
+alchemy.init(project_name="project42", 
+             run_name="mobilenet on cifar10", 
+             dataset="cifar10", 
+             model="mobilenet_v3", 
+             tags=["pytorch"])
+```
+
+now you can simply call the `log` function to send results to the platform 
+
+```python
+alchemy.log(epochs=1, metrics={'accuracy': 0.8, 'loss': 3.1415})
+```
+
+## Command line interface
+
+this repository provides a script to update results from a tensorboard checkpoint : `alchemy_cli`
 
 One parameter is mandatory : `log_file`, the path of the tensorboard log file to parse.
 
@@ -25,14 +69,6 @@ This script can be run "as is" with python 3
 python alchemy_cli.py <log_file> <parameters>
 ```
 
-But it can also be installed with setuptools
-```
-pip install [-e] .
-```
-or
-```
-python setup.py {install, develop}
-```
 
 and then be used directly with
 ```
