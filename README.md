@@ -6,7 +6,7 @@ this is the software development kit (SDK) and command line interface (CLI) for 
 
 to install this package run
 ```python
-pip install alchemy-cli
+pip install upstride-alchemy
 ```
 
 or clone this repository and run
@@ -28,18 +28,18 @@ import alchemy
 you can now login to alchemy using your credentials and initialize the project :
 
 ```python
-alchemy.login(your@email, yourpassword)
-alchemy.init(project_name="project42", 
-             run_name="mobilenet on cifar10", 
-             dataset="cifar10", 
-             model="mobilenet_v3", 
-             tags=["pytorch"])
+alchemy.login('your@email', 'yourpassword')
+alchemy.init(project_name='project42', 
+             run_name='mobilenet on cifar10', 
+             dataset='cifar10', 
+             model='mobilenet_v3', 
+             tags=['pytorch'])
 ```
 
 now you can simply call the `log` function to send results to the platform 
 
 ```python
-alchemy.log(epochs=1, metrics={'accuracy': 0.8, 'loss': 3.1415})
+alchemy.log(epochs=1, metrics={'accuracy': 0.8, 'loss': 3.1415, 'whatever metric you want': 0.9})
 ```
 
 ## Command line interface
@@ -61,21 +61,27 @@ These parameters are:
 - `--model`: Neural Network model used in the run (only if new run)
 - `--scalar_plots`: scalar graph to upload
 
-Every parameter except ` log_file` can be stored in a yaml file, and provided with the `yaml_file`. An example can be seen in the file `example.yaml`
-
-This script can be run "as is" with python 3
-
+Every parameter except ` log_file` can be stored in a yaml file, and provided with the `yaml_file`. An example yaml file can be:
+```yaml
+user: your@email
+project: my_project
+run: my_run
+scalar_plots:
+ - my_metric1
+ - my_metric2
+tags:
+ - tag1
+ - tag2
+dataset: my_dataset
+model: my_model
 ```
-python alchemy_cli.py <log_file> <parameters>
-```
 
-
-and then be used directly with
-```
+This script can be run with
+```bash
 alchemy_cli <log_fie> <parameters>
 ```
 
-## Upload_everything
+### Upload_everything
 
 If your experiments are stored in a way that every event files comes with a corresponding yaml, you can use a dedicated script to upload runs based on a wildcard file pattern
 
